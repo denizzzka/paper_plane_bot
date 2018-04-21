@@ -15,9 +15,28 @@ string[] getPackagesList()
     return ret;
 }
 
-Json getPackageContent(string pkgName)
+Json getPackageDescription(string pkgName)
 {
     return getContent(`https://code.dlang.org/packages/`~pkgName~`.json`).toString.parseJsonString;
+}
+
+import std.datetime.systime: SysTime;
+
+SysTime getUpdatedTime(Json packageDescription)
+{
+    auto arr = packageDescription["versions"];
+
+    SysTime k = SysTime.min;
+
+    foreach(ref e; arr.byValue)
+    {
+        SysTime curr = SysTime.fromISOExtString(e["date"].get!string);
+
+        if(curr > k)
+            k = curr;
+    }
+
+    return k;
 }
 
 unittest
@@ -30,6 +49,11 @@ unittest
     assert(pkgs[0].length > 0);
     assert(canFind(pkgs, "dub"));
 
-    auto pkg = getPackageContent("dub");
+    auto pkg = getPackageDescription("dub");
     assert(pkg["name"].get!string == "dub");
+
+    auto updated = pkg.getUpdatedTime;
+    import std.stdio; writeln(updated);
+    assert(updated > SysTime.min);
+    assert(updated < SysTime.max);
 }
