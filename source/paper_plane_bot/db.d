@@ -5,6 +5,7 @@ import std.exception: enforce;
 
 private Database db;
 private Statement stmnt_addChatId;
+private Statement stmnt_checkChatId;
 private Statement stmnt_getChatIds;
 private Statement stmnt_delChatId;
 
@@ -21,6 +22,10 @@ void openDb(string filename = "paper_plane_db.sqlite3")
          VALUES (:chat_id)"
     );
 
+    stmnt_checkChatId = db.prepare(
+        "SELECT count(*) FROM chats WHERE chat_id = :chat_id"
+    );
+
     stmnt_getChatIds = db.prepare(
         "SELECT chat_id FROM chats"
     );
@@ -30,10 +35,21 @@ void openDb(string filename = "paper_plane_db.sqlite3")
     );
 }
 
-void addChatId(long chatId)
+// FIXME: here is need transaction
+void upsertChatId(long chatId)
 {
-    stmnt_addChatId.inject(chatId);
-    enforce(db.changes == 1);
+    stmnt_checkChatId.bind(1, chatId);
+    auto count = stmnt_checkChatId.execute().oneValue!long;
+    stmnt_checkChatId.reset;
+
+    enforce(count <= 1);
+
+    if(count == 0)
+    {
+        stmnt_addChatId.inject(chatId);
+
+        enforce(db.changes == 1);
+    }
 }
 
 long[] getChatIds()
