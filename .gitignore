@@ -1,0 +1,14 @@
+.dub
+docs.json
+__dummy.html
+docs/
+paper_plane_bot.so
+paper_plane_bot.dylib
+paper_plane_bot.dll
+paper_plane_bot.a
+paper_plane_bot.lib
+paper_plane_bot-test-*
+*.exe
+*.o
+*.obj
+*.lst
