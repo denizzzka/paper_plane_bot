@@ -14,12 +14,13 @@ void openDb(string filename = "paper_plane_db.sqlite3")
     db = Database(filename);
 
     db.run(`CREATE TABLE IF NOT EXISTS chats (
-                chat_id INTEGER PRIMARY KEY NOT NULL
+                chat_id INTEGER PRIMARY KEY NOT NULL,
+                descr TEXT
             )`);
 
     stmnt_addChatId = db.prepare(
-        "INSERT INTO chats (chat_id)
-         VALUES (:chat_id)"
+        "INSERT INTO chats (chat_id, descr)
+         VALUES (:chat_id, :descr)"
     );
 
     stmnt_checkChatId = db.prepare(
@@ -36,7 +37,7 @@ void openDb(string filename = "paper_plane_db.sqlite3")
 }
 
 // FIXME: here is need transaction
-void upsertChatId(long chatId)
+void upsertChatId(long chatId, string descr)
 {
     stmnt_checkChatId.bind(1, chatId);
     auto count = stmnt_checkChatId.execute().oneValue!long;
@@ -46,7 +47,7 @@ void upsertChatId(long chatId)
 
     if(count == 0)
     {
-        stmnt_addChatId.inject(chatId);
+        stmnt_addChatId.inject(chatId, descr);
 
         enforce(db.changes == 1);
     }
@@ -77,8 +78,8 @@ void delChatId(long chatId)
 unittest
 {
     openDb(":memory:");
-    upsertChatId(123);
-    upsertChatId(456);
+    upsertChatId(123, "some description");
+    upsertChatId(456, "sdf sdf");
 
     long[] ids = getChatIds();
     assert(ids[0] == 123 || ids[0] == 456);

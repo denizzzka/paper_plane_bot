@@ -47,11 +47,15 @@ void main()
 
 void sendNotifies(PackageDescr[] updatedPackages)
 {
-    auto incoming = telegram.getUpdates;
+    auto incoming = telegram.getUpdates(100, 30);
 
     foreach(ref inc; incoming)
     {
-        upsertChatId(inc.message.chat.id);
+        import vibe.data.json;
+
+        string descr = serializeToJsonString(inc.message);
+
+        upsertChatId(inc.message.chat.id, descr);
     }
 
     foreach_reverse(ref pkg; updatedPackages)
