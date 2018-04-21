@@ -2,6 +2,8 @@ module paper_plane_bot.grab;
 
 import requests;
 import vibe.data.json;
+import std.datetime;
+import std.conv: to;
 
 string[] getPackagesList()
 {
@@ -19,8 +21,6 @@ Json getPackageDescription(string pkgName)
 {
     return getContent(`https://code.dlang.org/packages/`~pkgName~`.json`).toString.parseJsonString;
 }
-
-import std.datetime.systime: SysTime;
 
 SysTime getUpdatedTime(Json packageDescription)
 {
@@ -43,11 +43,11 @@ unittest
 {
     import std.algorithm.searching;
 
-    auto pkgs = getPackagesList;
+    //~ auto pkgs = getPackagesList; // this function isn't used
 
-    assert(pkgs.length > 0);
-    assert(pkgs[0].length > 0);
-    assert(canFind(pkgs, "dub"));
+    //~ assert(pkgs.length > 0);
+    //~ assert(pkgs[0].length > 0);
+    //~ assert(canFind(pkgs, "dub"));
 
     auto pkg = getPackageDescription("dub");
     assert(pkg["name"].get!string == "dub");
@@ -55,4 +55,65 @@ unittest
     auto updated = pkg.getUpdatedTime;
     assert(updated > SysTime.min);
     assert(updated < SysTime.max);
+}
+
+struct PackageDescr
+{
+    string name;
+    DateTime updated;
+}
+
+PackageDescr[] getPackagesSortedByUpdated()
+{
+    import html;
+
+    const string url = `http://code.dlang.org/?sort=updated&category=&skip=0&limit=10000000`;
+    auto htmldoc = url.getContent.toString.createDocument;
+
+    auto tbl = htmldoc.querySelector("html body div#content table");
+    auto rows = tbl.find("tr");
+
+    PackageDescr[] ret;
+
+    foreach(r; rows)
+    {
+        PackageDescr d;
+
+        d.name = r.find("a").front.text.to!string;
+        auto ts = r.find(`span.dull`).front.to!string.idup.fetchTimeFromHtml;
+
+        if(ts.length > 0)
+        {
+            d.updated = DateTime.fromSimpleString(ts);
+
+            ret ~= d;
+        }
+    }
+
+    return ret;
+}
+
+unittest
+{
+    auto pkgs = getPackagesSortedByUpdated;
+
+    assert(pkgs[0].updated > DateTime.min);
+    assert(pkgs[0].updated < DateTime.max);
+}
+
+// Due to attr(name) fails
+private string fetchTimeFromHtml(string html)
+{
+    import std.regex;
+
+    auto r = regex(`title="([0-9][0-9][0-9][0-9]-.+?)Z"`);
+
+    return matchFirst(html, r)[1];
+}
+
+unittest
+{
+    string s = `<span title="2018-Apr-20 20:50:05Z" class="dull nobreak"/>`;
+
+    assert(s.fetchTimeFromHtml == "2018-Apr-20 20:50:05");
 }
