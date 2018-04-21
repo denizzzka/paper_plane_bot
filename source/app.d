@@ -13,8 +13,21 @@ void main()
     {
         try
             lastModified = filename.timeLastModified;
-        catch(FileException){} // file not found, will be created new one
-
-        filename.write([]);
+        catch(FileException)
+            return; // file not found, will be created new one
+        finally
+            filename.write([]); // create or update timestamp file
     }
+
+    auto pkgs_list = getPackagesSortedByUpdated;
+    string[] updatedPackages;
+
+    import std.conv: to;
+
+    foreach(const ref pkg; pkgs_list)
+        if(pkg.updated >= lastModified.to!DateTime)
+            updatedPackages ~= pkg.name;
+
+    import std.stdio;
+    writeln(updatedPackages);
 }
