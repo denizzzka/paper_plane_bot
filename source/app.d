@@ -1,5 +1,6 @@
 import std.stdio;
 import paper_plane_bot.grab;
+import db;
 
 void main()
 {
@@ -7,6 +8,8 @@ void main()
     import std.datetime;
 
     const string filename = "last_updated_mtime.txt";
+
+    openDb();
 
     SysTime lastModified = Clock.currTime;
 
