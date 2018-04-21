@@ -13,7 +13,7 @@ void main()
     import vibe.core.file: readFileUTF8;
     import vibe.data.json;
 
-    setLogLevel(LogLevel.trace);
+    //~ setLogLevel(LogLevel.trace);
 
     const config = readFileUTF8("config.json").parseJsonString;
     telegram = new telega.BotApi(config["telegram"]["secretBotToken"].get!string);
@@ -78,6 +78,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
                 if(e.code == 403) // blocked by user
                 {
                     delChatId(chatId);
+                    logInfo("chatId %d removed due to user block", chatId);
                     continue;
                 }
                 else
