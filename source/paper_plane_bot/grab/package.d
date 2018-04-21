@@ -53,7 +53,6 @@ unittest
     assert(pkg["name"].get!string == "dub");
 
     auto updated = pkg.getUpdatedTime;
-    import std.stdio; writeln(updated);
     assert(updated > SysTime.min);
     assert(updated < SysTime.max);
 }
