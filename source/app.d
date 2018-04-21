@@ -23,14 +23,20 @@ void main()
     }
 
     auto pkgs_list = getPackagesSortedByUpdated;
-    string[] updatedPackages;
+    PackageDescr[] updatedPackages;
 
     import std.conv: to;
 
     foreach(const ref pkg; pkgs_list)
         if(pkg.updated >= lastModified.to!DateTime)
-            updatedPackages ~= pkg.name;
+            updatedPackages ~= pkg;
 
-    import std.stdio;
-    writeln(updatedPackages);
+    sendNotifies(updatedPackages);
+}
+
+void sendNotifies(PackageDescr[] updatedPackages)
+{
+    foreach(ref pkg; updatedPackages)
+    {
+    }
 }

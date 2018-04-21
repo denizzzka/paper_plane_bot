@@ -61,6 +61,7 @@ struct PackageDescr
 {
     string name;
     DateTime updated;
+    string ver;
 }
 
 PackageDescr[] getPackagesSortedByUpdated()
@@ -85,6 +86,7 @@ PackageDescr[] getPackagesSortedByUpdated()
         if(ts.length > 0)
         {
             d.updated = DateTime.fromSimpleString(ts);
+            d.ver = r.find(`.nobreak`).front.text.to!string.fetchVerFromHtml;
 
             ret ~= d;
         }
@@ -99,6 +101,7 @@ unittest
 
     assert(pkgs[0].updated > DateTime.min);
     assert(pkgs[0].updated < DateTime.max);
+    assert(pkgs[0].ver.length > 3);
 }
 
 // Due to attr(name) fails
@@ -116,4 +119,22 @@ unittest
     string s = `<span title="2018-Apr-20 20:50:05Z" class="dull nobreak"/>`;
 
     assert(s.fetchTimeFromHtml == "2018-Apr-20 20:50:05");
+}
+
+// Due to broken page formatting
+private string fetchVerFromHtml(string html)
+{
+    import std.regex;
+    import std.string: strip;
+
+    auto r = regex(`(.+?),`);
+
+    return matchFirst(html.strip, r)[1];
+}
+
+unittest
+{
+    string s = `					0.15.16, an hour ago`;
+
+    assert(s.fetchVerFromHtml == "0.15.16");
 }
