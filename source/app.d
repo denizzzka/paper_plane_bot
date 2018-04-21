@@ -11,6 +11,9 @@ void main()
     import std.datetime;
     import vibe.core.file: readFileUTF8;
     import vibe.data.json;
+    import vibe.core.log;
+
+    setLogLevel(LogLevel.trace);
 
     const config = readFileUTF8("config.json").parseJsonString;
     telegram = new telega.BotApi(config["telegram"]["secretBotToken"].get!string);

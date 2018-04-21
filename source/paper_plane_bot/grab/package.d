@@ -62,6 +62,7 @@ struct PackageDescr
     string name;
     DateTime updated;
     string ver;
+    string url;
 }
 
 PackageDescr[] getPackagesSortedByUpdated()
@@ -81,6 +82,7 @@ PackageDescr[] getPackagesSortedByUpdated()
         PackageDescr d;
 
         d.name = r.find("a").front.text.to!string;
+        d.url = r.find("a").front.attr("href").to!string;
         auto ts = r.find(`span.dull`).front.to!string.idup.fetchTimeFromHtml;
 
         if(ts.length > 0)
@@ -102,6 +104,7 @@ unittest
     assert(pkgs[0].updated > DateTime.min);
     assert(pkgs[0].updated < DateTime.max);
     assert(pkgs[0].ver.length > 3);
+    assert(pkgs[0].url[0 .. 8] == "packages");
 }
 
 // Due to attr(name) fails

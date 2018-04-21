@@ -77,8 +77,8 @@ void delChatId(long chatId)
 unittest
 {
     openDb(":memory:");
-    addChatId(123);
-    addChatId(456);
+    upsertChatId(123);
+    upsertChatId(456);
 
     long[] ids = getChatIds();
     assert(ids[0] == 123 || ids[0] == 456);
