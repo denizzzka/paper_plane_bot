@@ -2,6 +2,7 @@ import std.stdio;
 import paper_plane_bot.grab;
 import db;
 import telega = telega.botapi;
+import vibe.core.log;
 
 private telega.BotApi telegram;
 
@@ -11,7 +12,6 @@ void main()
     import std.datetime;
     import vibe.core.file: readFileUTF8;
     import vibe.data.json;
-    import vibe.core.log;
 
     setLogLevel(LogLevel.trace);
 
@@ -54,16 +54,35 @@ void sendNotifies(PackageDescr[] updatedPackages)
         upsertChatId(inc.message.chat.id);
     }
 
-    auto chats = getChatIds;
-
-    foreach(ref pkg; updatedPackages)
+    foreach_reverse(ref pkg; updatedPackages)
     {
+        auto chats = getChatIds;
+
         foreach(chatId; chats)
         {
-            import std.stdio;
-            writefln("Send msg about package %s to chatId %d", pkg.name, chatId);
+            import std.format;
 
-            telegram.sendMessage(chatId, pkg.name~" was updated");
+            string msg = format(
+                "A new dub package *%s %s* has been released: http://code.dlang.org/%s",
+                pkg.name,
+                pkg.ver,
+                pkg.url
+            );
+
+            logTrace("[chatId:%d] %s", chatId, msg);
+
+            try
+                telegram.sendMessage(chatId, msg);
+            catch(telega.TelegramBotApiException e)
+            {
+                if(e.code == 403) // blocked by user
+                {
+                    delChatId(chatId);
+                    continue;
+                }
+                else
+                    logError(e.msg);
+            }
         }
     }
 }
