@@ -29,7 +29,7 @@ void main()
 
 void sendNotifies(PackageDescr[] updatedPackages)
 {
-    auto incoming = telegram.getUpdates(100, 30);
+    auto incoming = telegram.getUpdates(100, 1);
 
     foreach(ref inc; incoming)
     {
@@ -49,10 +49,10 @@ void sendNotifies(PackageDescr[] updatedPackages)
             import std.format;
 
             string msg = format(
-                "A new dub package *%s %s* has been released: http://code.dlang.org/%s",
+                "A new dub package [%s](http://code.dlang.org/%s) *%s* has been released",
                 pkg.name,
+                pkg.url,
                 pkg.ver,
-                pkg.url
             );
 
             logTrace("[chatId:%d] %s", chatId, msg);
