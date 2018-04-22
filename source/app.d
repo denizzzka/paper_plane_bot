@@ -49,7 +49,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
             import std.format;
 
             string msg = format(
-                "A new dub package [%s](http://code.dlang.org/%s) *%s* has been released",
+                "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
                 pkg.name,
                 pkg.url,
                 pkg.ver,
