@@ -8,8 +8,6 @@ private telega.BotApi telegram;
 
 void main()
 {
-    import std.file;
-    import std.datetime;
     import vibe.core.file: readFileUTF8;
     import vibe.data.json;
 
@@ -18,29 +16,13 @@ void main()
     const config = readFileUTF8("config.json").parseJsonString;
     telegram = new telega.BotApi(config["telegram"]["secretBotToken"].get!string);
 
-    const string filename = "last_updated_mtime.txt";
-
     openDb();
 
-    SysTime lastModified = Clock.currTime;
-
-    {
-        try
-            lastModified = filename.timeLastModified;
-        catch(FileException)
-            return; // file not found, will be created new one
-        finally
-            filename.write([]); // create or update timestamp file
-    }
-
+    logInfo("Begin download packages list");
     auto pkgs_list = getPackagesSortedByUpdated;
-    PackageDescr[] updatedPackages;
-
-    import std.conv: to;
-
-    foreach(const ref pkg; pkgs_list)
-        if(pkg.updated >= lastModified.to!DateTime)
-            updatedPackages ~= pkg;
+    logInfo("Downloaded %d packages descriptions. Begin comparison for new versions.", pkgs_list.length);
+    PackageDescr[] updatedPackages = upsertPackages(pkgs_list);
+    logInfo("Number of new or updated descriptions: %d", updatedPackages.length);
 
     sendNotifies(updatedPackages);
 }
@@ -86,7 +68,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
                     continue;
                 }
                 else
-                    logError(e.msg);
+                    logError(`Telegram: `~e.msg);
             }
         }
     }
