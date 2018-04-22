@@ -1,9 +1,18 @@
 module paper_plane_bot.grab;
 
-import requests;
 import vibe.data.json;
 import std.datetime;
 import std.conv: to;
+
+auto getContent(string url)
+{
+    import requests;
+
+    auto rq = Request();
+    rq.addHeaders(["User-Agent": "DlangAnnounceBot (+https://github.com/denizzzka/paper_plane_bot)"]);
+
+    return rq.get(url).responseBody;
+}
 
 string[] getPackagesList()
 {
