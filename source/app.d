@@ -24,6 +24,11 @@ void main()
     PackageDescr[] updatedPackages = upsertPackages(pkgs_list);
     logInfo("Number of new or updated descriptions: %d", updatedPackages.length);
 
+    import std.conv: to;
+
+    foreach(pkg; updatedPackages)
+        logInfo(pkg.to!string);
+
     sendNotifies(updatedPackages);
 }
 
@@ -39,6 +44,8 @@ void sendNotifies(PackageDescr[] updatedPackages)
 
         upsertChatId(inc.message.chat.id, descr);
         logInfo("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
+
+        telegram.updateProcessed(inc);
     }
 
     foreach_reverse(ref pkg; updatedPackages)
