@@ -38,7 +38,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
         string descr = serializeToJsonString(inc.message);
 
         upsertChatId(inc.message.chat.id, descr);
-        logInfo("Chat id %d added, descr: %s", inc.message.chat.id, descr);
+        logInfo("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
     }
 
     foreach_reverse(ref pkg; updatedPackages)
