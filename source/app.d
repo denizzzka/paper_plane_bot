@@ -38,6 +38,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
         string descr = serializeToJsonString(inc.message);
 
         upsertChatId(inc.message.chat.id, descr);
+        logInfo("Chat id %d added, descr: %s", inc.message.chat.id, descr);
     }
 
     foreach_reverse(ref pkg; updatedPackages)
@@ -64,7 +65,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
                 if(e.code == 403) // blocked by user
                 {
                     delChatId(chatId);
-                    logInfo("chatId %d removed due to user block", chatId);
+                    logInfo("chat id %d removed due to user block", chatId);
                     continue;
                 }
                 else
