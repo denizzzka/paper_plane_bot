@@ -1,20 +1,32 @@
 import std.stdio;
 import paper_plane_bot.grab;
 import db;
-import telega = telega.botapi;
+import tg = telega.botapi;
 import vibe.core.log;
+import vibe.data.json;
 
-private telega.BotApi telegram;
+private tg.BotApi telegram;
 
 void main()
 {
     import vibe.core.file: readFileUTF8;
-    import vibe.data.json;
+    import telega.drivers.requests: RequestsHttpClient;
 
     //~ setLogLevel(LogLevel.trace);
 
-    const config = readFileUTF8("config.json").parseJsonString;
-    telegram = new telega.BotApi(config["telegram"]["secretBotToken"].get!string);
+    const configFile = readFileUTF8("config.json").parseJsonString;
+    const tgconf = configFile["telegram"];
+
+    auto httpClient = new RequestsHttpClient();
+
+    if("SOCKS5_proxy" in tgconf)
+    {
+        const socks5conf = tgconf["SOCKS5_proxy"];
+
+        httpClient.setProxy(socks5conf["server"].get!string, socks5conf["port"].get!ushort);
+    }
+
+    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, httpClient);
 
     openDb();
 
@@ -38,12 +50,10 @@ void sendNotifies(PackageDescr[] updatedPackages)
 
     foreach(ref inc; incoming)
     {
-        import vibe.data.json;
-
         string descr = serializeToJsonString(inc.message);
 
         upsertChatId(inc.message.chat.id, descr);
-        logInfo("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
+        logTrace("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
 
         telegram.updateProcessed(inc);
     }
@@ -67,7 +77,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
 
             try
                 telegram.sendMessage(chatId, msg);
-            catch(telega.TelegramBotApiException e)
+            catch(tg.TelegramBotApiException e)
             {
                 if(e.code == 403) // blocked by user
                 {
