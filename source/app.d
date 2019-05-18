@@ -46,7 +46,9 @@ void main()
 
 void sendNotifies(PackageDescr[] updatedPackages)
 {
-    auto incoming = telegram.getUpdates(100, 1);
+    int nextMsgId;
+
+    auto incoming = telegram.getUpdates(nextMsgId, 30);
 
     foreach(ref inc; incoming)
     {
@@ -55,7 +57,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
         upsertChatId(inc.message.chat.id, descr);
         logTrace("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
 
-        telegram.updateProcessed(inc);
+        nextMsgId = inc.update_id + 1;
     }
 
     foreach_reverse(ref pkg; updatedPackages)
