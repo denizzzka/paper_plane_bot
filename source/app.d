@@ -68,17 +68,20 @@ void sendNotifies(PackageDescr[] updatedPackages)
         {
             import std.format;
 
-            string msg = format(
+            tg.SendMessageMethod msg;
+            msg.chat_id = chatId;
+            msg.parse_mode = tg.ParseMode.Markdown;
+            msg.text = format(
                 "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
                 pkg.name,
                 pkg.url,
                 pkg.ver,
             );
 
-            logTrace("[chatId:%d] %s", chatId, msg);
+            logTrace("[chatId:%d] %s", chatId, msg.text);
 
             try
-                telegram.sendMessage(chatId, msg);
+                telegram.sendMessage(msg);
             catch(tg.TelegramBotApiException e)
             {
                 if(e.code == 403) // blocked by user
@@ -88,7 +91,7 @@ void sendNotifies(PackageDescr[] updatedPackages)
                     continue;
                 }
                 else
-                    logError(`Telegram: `~e.msg);
+                    logError(`Telegram: `~msg.text);
             }
         }
     }
