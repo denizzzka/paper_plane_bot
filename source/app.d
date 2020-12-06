@@ -46,6 +46,8 @@ void main()
 
 void sendNotifies(PackageDescr[] updatedPackages)
 {
+    import telega.telegram.basic: getUpdates, sendMessage, SendMessageMethod, ParseMode;
+
     int nextMsgId;
 
     auto incoming = telegram.getUpdates(nextMsgId, 30);
@@ -68,9 +70,9 @@ void sendNotifies(PackageDescr[] updatedPackages)
         {
             import std.format;
 
-            tg.SendMessageMethod msg;
+            SendMessageMethod msg;
             msg.chat_id = chatId;
-            msg.parse_mode = tg.ParseMode.Markdown;
+            msg.parse_mode = ParseMode.Markdown;
             msg.text = format(
                 "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
                 pkg.name,
