@@ -2,6 +2,7 @@ import std.stdio;
 import paper_plane_bot.grab;
 import db;
 import tg = telega.botapi;
+import telega.telegram.basic: getUpdates, ParseMode, SendMessageMethod, sendMessage;
 import vibe.core.log;
 import vibe.data.json;
 
@@ -54,8 +55,8 @@ void sendNotifies(PackageDescr[] updatedPackages)
     {
         string descr = serializeToJsonString(inc.message);
 
-        upsertChatId(inc.message.chat.id, descr);
-        logTrace("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
+        upsertChatId(inc.message.get.chat.id, descr);
+        logTrace("Upsert chat id %d, descr: %s", inc.message.get.chat.id, descr);
 
         nextMsgId = inc.update_id + 1;
     }
@@ -68,9 +69,9 @@ void sendNotifies(PackageDescr[] updatedPackages)
         {
             import std.format;
 
-            tg.SendMessageMethod msg;
+            SendMessageMethod msg;
             msg.chat_id = chatId;
-            msg.parse_mode = tg.ParseMode.Markdown;
+            msg.parse_mode = ParseMode.Markdown;
             msg.text = format(
                 "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
                 pkg.name,
