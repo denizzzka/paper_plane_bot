@@ -2,7 +2,6 @@ import std.stdio;
 import paper_plane_bot.grab;
 import db;
 import tg = telega.botapi;
-import telega.telegram.basic: getUpdates, ParseMode, SendMessageMethod, sendMessage;
 import vibe.core.log;
 import vibe.data.json;
 
@@ -47,6 +46,8 @@ void main()
 
 void sendNotifies(PackageDescr[] updatedPackages)
 {
+    import telega.telegram.basic: getUpdates, sendMessage, SendMessageMethod, ParseMode;
+
     int nextMsgId;
 
     auto incoming = telegram.getUpdates(nextMsgId, 30);
