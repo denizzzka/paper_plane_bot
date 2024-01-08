@@ -27,6 +27,10 @@ void main()
     }
 
     telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, httpClient);
+    const chatId = tgconf["chatId"].get!long;
+
+    logInfo("Check Telegram for incoming private messages");
+    processIncomingMessages();
 
     openDb();
 
@@ -41,60 +45,73 @@ void main()
     foreach(pkg; updatedPackages)
         logInfo(pkg.to!string);
 
-    sendNotifies(updatedPackages);
+    logInfo("Send updates into chat");
+    foreach_reverse(ref pkg; updatedPackages)
+        sendPackageUpdatedNotify(chatId, pkg);
 }
 
-void sendNotifies(PackageDescr[] updatedPackages)
+void processIncomingMessages()
 {
-    import telega.telegram.basic: getUpdates, sendMessage, SendMessageMethod, ParseMode;
+    import telega.telegram.basic: getUpdates;
 
     int nextMsgId;
 
-    auto incoming = telegram.getUpdates(nextMsgId, 30);
-
-    foreach(ref inc; incoming)
+    foreach(att; 0..3)
     {
-        string descr = serializeToJsonString(inc.message);
+        auto incoming = telegram.getUpdates(nextMsgId, 30, 0);
 
-        upsertChatId(inc.message.chat.id, descr);
-        logTrace("Upsert chat id %d, descr: %s", inc.message.chat.id, descr);
+        if(att > 0 && incoming.length == 0)
+            break;
 
-        nextMsgId = inc.update_id + 1;
-    }
-
-    foreach_reverse(ref pkg; updatedPackages)
-    {
-        auto chats = getChatIds;
-
-        foreach(chatId; chats)
+        foreach(ref inc; incoming)
         {
-            import std.format;
+            string descr = serializeToJsonString(inc.message);
 
-            SendMessageMethod msg;
-            msg.chat_id = chatId;
-            msg.parse_mode = ParseMode.Markdown;
-            msg.text = format(
-                "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
-                pkg.name,
-                pkg.url,
-                pkg.ver,
-            );
+            logTrace("Incoming message: %s", descr);
 
-            logTrace("[chatId:%d] %s", chatId, msg.text);
+            if(!inc.message.isNull)
+                sendNotify(inc.message.get.chat.id, `Sorry, this bot isn't longer functional. Please go to [new channel](https://t.me/dlang_announces)`);
 
-            try
-                telegram.sendMessage(msg);
-            catch(tg.TelegramBotApiException e)
-            {
-                if(e.code == 403) // blocked by user
-                {
-                    delChatId(chatId);
-                    logInfo("chat id %d removed due to user block", chatId);
-                    continue;
-                }
-                else
-                    logError(`Telegram: `~msg.text);
-            }
+            nextMsgId = inc.update_id + 1;
         }
+    }
+}
+
+void sendPackageUpdatedNotify(in long chatId, in PackageDescr pkg)
+{
+    import std.format;
+
+    const text = format(
+        "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
+        pkg.name,
+        pkg.url,
+        pkg.ver,
+    );
+
+    sendNotify(chatId, text);
+}
+
+void sendNotify(in long chatId, in string markDownText)
+{
+    import telega.telegram.basic: sendMessage, SendMessageMethod, ParseMode;
+
+    SendMessageMethod msg;
+    msg.chat_id = chatId;
+    msg.parse_mode = ParseMode.Markdown;
+    msg.text = markDownText;
+
+    logTrace("[chatId:%d] %s", chatId, msg.text);
+
+    try
+        telegram.sendMessage(msg);
+    catch(tg.TelegramBotApiException e)
+    {
+        if(e.code == 403) // blocked by user
+        {
+            delChatId(chatId);
+            logError("chat id %d blocks posting for this bot", chatId);
+        }
+        else
+            logError(`Telegram: `~msg.text);
     }
 }
