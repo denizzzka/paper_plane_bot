@@ -29,8 +29,6 @@ void main()
     telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, httpClient);
     const chatId = tgconf["chatId"].get!long;
 
-    setLogLevel = LogLevel.trace;
-
     logInfo("Check Telegram for incoming private messages");
     processIncomingMessages();
 
