@@ -82,7 +82,7 @@ void sendPackageUpdatedNotify(in long chatId, in PackageDescr pkg)
     import std.format;
 
     const text = format(
-        "A new version of dub package [%s](http://code.dlang.org/%s) *%s* has been released",
+        "A new version of dub package [%s](https://code.dlang.org/%s) *%s* has been released",
         pkg.name,
         pkg.url,
         pkg.ver,
