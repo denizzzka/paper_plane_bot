@@ -1,6 +1,6 @@
 # Dlang Announce Telegram bot
 
-To subscribe find Telegram contact @dlang_announce_bot and write something to it.
+https://t.me/dlang_announces
 
 ---
 For developers:
