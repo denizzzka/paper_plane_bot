@@ -1,3 +1,4 @@
+import std.getopt;
 import std.stdio;
 import paper_plane_bot.grab;
 import db;
@@ -7,12 +8,26 @@ import vibe.data.json;
 
 private tg.BotApi telegram;
 
-void main()
+void main(string[] args)
 {
     import vibe.core.file: readFileUTF8;
     import telega.drivers.requests: RequestsHttpClient;
 
-    //~ setLogLevel(LogLevel.trace);
+    bool fastForward;
+
+    auto helpInformation = getopt(
+            args,
+            "ff", `Only update DB but do not send anything to Telegram ("fast forward")`, &fastForward,
+        );
+
+    if(helpInformation.helpWanted)
+    {
+        defaultGetoptPrinter("Some information about the program.", helpInformation.options);
+
+        return;
+    }
+
+    setLogLevel(LogLevel.diagnostic);
 
     const configFile = readFileUTF8("config.json").parseJsonString;
     const tgconf = configFile["telegram"];
@@ -45,9 +60,14 @@ void main()
     foreach(pkg; updatedPackages)
         logInfo(pkg.to!string);
 
-    logInfo("Send updates into chat");
-    foreach_reverse(ref pkg; updatedPackages)
-        sendPackageUpdatedNotify(chatId, pkg);
+    if(fastForward)
+        logDiagnostic(`"Fast forward" enabled: Do not send updates to TG`);
+    else
+    {
+        logInfo("Send updates into chat");
+        foreach_reverse(ref pkg; updatedPackages)
+            sendPackageUpdatedNotify(chatId, pkg);
+    }
 }
 
 void processIncomingMessages()
