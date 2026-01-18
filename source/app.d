@@ -11,6 +11,7 @@ private tg.BotApi telegram;
 void main(string[] args)
 {
     import vibe.core.file: readFileUTF8;
+    import vibe.http.client;
 
     bool fastForward;
 
@@ -31,7 +32,19 @@ void main(string[] args)
     const configFile = readFileUTF8("config.json").parseJsonString;
     const tgconf = configFile["telegram"];
 
-    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl);
+    httpSettings = new HTTPClientSettings;
+
+    {
+        import vibe.inet.url;
+
+        const proxy_url = "proxy_url" in configFile;
+        if(proxy_url)
+            httpSettings.proxyURL = URL(proxy_url.get!string);
+    }
+
+    //~ auto httpClient = connectHTTP(tg.BaseApiUrl.URL, httpSettings);
+
+    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, /* FIXME: , httpClient */);
     const chatId = tgconf["chatId"].get!long;
 
     logInfo("Check Telegram for incoming private messages");

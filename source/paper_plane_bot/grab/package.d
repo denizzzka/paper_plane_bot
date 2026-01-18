@@ -3,16 +3,18 @@ module paper_plane_bot.grab;
 import vibe.data.json;
 import std.datetime;
 import std.conv: to;
+import vibe.http.client;
+
+HTTPClientSettings httpSettings;
 
 auto getContentObj(string url)
 {
-    import vibe.http.client;
-
     return requestHTTP(
         url,
         (req){
             req.headers["User-Agent"] = "DlangAnnounceBot (+https://github.com/denizzzka/paper_plane_bot)";
-        }
+        },
+        httpSettings
     );
 }
 
