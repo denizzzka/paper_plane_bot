@@ -4,19 +4,41 @@ import vibe.data.json;
 import std.datetime;
 import std.conv: to;
 
-auto getContent(string url)
+auto getContentObj(string url)
 {
-    import requests;
+    import vibe.http.client;
 
-    auto rq = Request();
-    rq.addHeaders(["User-Agent": "DlangAnnounceBot (+https://github.com/denizzzka/paper_plane_bot)"]);
+    return requestHTTP(
+        url,
+        (req){
+            req.headers["User-Agent"] = "DlangAnnounceBot (+https://github.com/denizzzka/paper_plane_bot)";
+        }
+    );
+}
 
-    return rq.get(url).responseBody;
+Json getContentJson(string url)
+{
+    return url.getContentObj.readJson;
+}
+
+string getContentUTF8String(string url)
+{
+    import vibe.core.stream: pipe;
+    import vibe.stream.memory: createMemoryOutputStream;
+    import std.utf: toUTF8;
+
+    auto res = getContentObj(url);
+    auto istr = res.bodyReader;
+    auto inMem = createMemoryOutputStream;
+
+    pipe(istr, inMem, ulong.max);
+
+    return (cast(char[]) inMem.data).toUTF8;
 }
 
 string[] getPackagesList()
 {
-    Json content = getContent(`https://code.dlang.org/packages/index.json`).toString.parseJsonString;
+    Json content = getContentJson(`https://code.dlang.org/packages/index.json`);
 
     string[] ret;
 
@@ -28,7 +50,7 @@ string[] getPackagesList()
 
 Json getPackageDescription(string pkgName)
 {
-    return getContent(`https://code.dlang.org/packages/`~pkgName~`.json`).toString.parseJsonString;
+    return getContentJson(`https://code.dlang.org/packages/`~pkgName~`.json`);
 }
 
 SysTime getUpdatedTime(Json packageDescription)
@@ -78,8 +100,8 @@ PackageDescr[] getPackagesSortedByUpdated()
 {
     import html;
 
-    const string url = `http://code.dlang.org/?sort=updated&category=&skip=0&limit=10000000`;
-    auto htmldoc = url.getContent.toString.createDocument;
+    const string url = `https://code.dlang.org/?sort=updated&category=&skip=0&limit=10000000`;
+    auto htmldoc = url.getContentUTF8String.createDocument;
 
     auto tbl = htmldoc.querySelector("html body div#content table");
     auto rows = tbl.find("tr");
