@@ -7,6 +7,11 @@ import vibe.http.client;
 
 HTTPClientSettings httpSettings;
 
+static this()
+{
+    httpSettings = new HTTPClientSettings;
+}
+
 auto getContentObj(string url)
 {
     return requestHTTP(

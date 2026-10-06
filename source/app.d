@@ -3,6 +3,7 @@ import std.stdio;
 import paper_plane_bot.grab;
 import db;
 import tg = telega.botapi;
+import tg_http;
 import vibe.core.log;
 import vibe.data.json;
 
@@ -42,9 +43,14 @@ void main(string[] args)
             httpSettings.proxyURL = URL(proxy_url.get!string);
     }
 
-    //~ auto httpClient = connectHTTP(tg.BaseApiUrl.URL, httpSettings);
+    // Прокси телеги опционален, без него работаем напрямую
+    const tgProxyUrl = tgconf["proxy"].type == Json.Type.undefined
+        ? "" : tgconf["proxy"].get!string;
 
-    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, /* FIXME: , httpClient */);
+    if(tgProxyUrl.length > 0)
+        logInfo("Telegram proxy: %s", tgProxyUrl);
+
+    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, new TgHttpClient(tgProxyUrl));
     const chatId = tgconf["chatId"].get!long;
 
     logInfo("Check Telegram for incoming private messages");

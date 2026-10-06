@@ -12,7 +12,8 @@ config.json:
 ```Json
 {
 	"telegram": {
-		"secretBotToken": "123:JShghjsdZlI-asdsdjasddasdasdsasds"
+		"secretBotToken": "123:JShghjsdZlI-asdsdjasddasdasdsasds",
+		"proxy": "http://user:pass@host:port"
 	}
 }
 ```
