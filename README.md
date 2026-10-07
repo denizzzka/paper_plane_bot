@@ -19,3 +19,7 @@ config.json:
 ```
 
 Must be executed regularly by cron-like tool.
+
+`paper_plane_bot --check_conn` only tests connectivity: it tries to fetch a
+package description from code.dlang.org and to call Telegram `getMe`, prints
+the result of each attempt and exits with code 1 if something failed.

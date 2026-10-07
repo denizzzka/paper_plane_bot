@@ -15,10 +15,12 @@ void main(string[] args)
     import vibe.http.client;
 
     bool fastForward;
+    bool checkConn;
 
     auto helpInformation = getopt(
             args,
             "ff", `Only update DB but do not send anything to Telegram ("fast forward")`, &fastForward,
+            "check_conn", `Only check that the feed and Telegram are reachable (through the proxy), then exit`, &checkConn,
         );
 
     if(helpInformation.helpWanted)
@@ -53,6 +55,12 @@ void main(string[] args)
     telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, new TgHttpClient(tgProxyUrl));
     const chatId = tgconf["chatId"].get!long;
 
+    if(checkConn)
+    {
+        checkConnections();
+        return;
+    }
+
     logInfo("Check Telegram for incoming private messages");
     processIncomingMessages();
 
@@ -77,6 +85,47 @@ void main(string[] args)
         foreach_reverse(ref pkg; updatedPackages)
             sendPackageUpdatedNotify(chatId, pkg);
     }
+}
+
+// --check_conn: try to reach the feed and Telegram by the same routes as a
+// regular run (that is through the proxy from the config) and report. We
+// write nothing to the DB and nothing to Telegram.
+void checkConnections()
+{
+    import core.stdc.stdlib: exit;
+    import telega.telegram.basic: getMe;
+
+    writefln("proxy: %s", httpSettings.proxyURL.schema is null
+        ? "none" : httpSettings.proxyURL.toString);
+
+    bool ok = checkOne("feed (code.dlang.org)", { getPackageDescription("dub"); });
+    ok &= checkOne("telegram (api.telegram.org)", { telegram.getMe(); });
+
+    if(!ok)
+        exit(1);
+}
+
+/// Performs the check and prints its result: returns whether it succeeded
+private bool checkOne(string what, void delegate() action)
+{
+    import std.datetime.stopwatch: AutoStart, StopWatch;
+
+    auto timer = StopWatch(AutoStart.yes);
+    string err;
+
+    try
+        action();
+    catch(Exception e)
+        err = e.msg;
+
+    timer.stop();
+
+    if(err is null)
+        writefln("%s: OK, %d ms", what, timer.peek.total!"msecs");
+    else
+        writefln("%s: FAILED, %d ms: %s", what, timer.peek.total!"msecs", err);
+
+    return err is null;
 }
 
 void processIncomingMessages()
