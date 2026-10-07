@@ -93,7 +93,7 @@ void main(string[] args)
     logInfo("Begin download packages list");
     auto pkgs_list = getPackagesSortedByUpdated;
     logInfo("Downloaded %d packages descriptions. Begin comparison for new versions.", pkgs_list.length);
-    PackageDescr[] updatedPackages = upsertPackages(pkgs_list);
+    PackageDescr[] updatedPackages = getChangedPackages(pkgs_list);
     logInfo("Number of new or updated descriptions: %d", updatedPackages.length);
 
     import std.conv: to;
@@ -102,12 +102,22 @@ void main(string[] args)
         logInfo(pkg.to!string);
 
     if(fastForward)
+    {
         logDiagnostic(`"Fast forward" enabled: Do not send updates to TG`);
+
+        foreach(ref pkg; updatedPackages)
+            markPackage(pkg);
+    }
     else
     {
         logInfo("Send updates into chat");
+
+        // The version is remembered only after Telegram accepted the
+        // message: a package that was not sent stays changed and goes out
+        // on the next run, while an accepted one is never repeated
         foreach_reverse(ref pkg; updatedPackages)
-            sendPackageUpdatedNotify(chatId, pkg);
+            if(sendPackageUpdatedNotify(chatId, pkg))
+                markPackage(pkg);
     }
 }
 
@@ -179,7 +189,9 @@ void processIncomingMessages()
     }
 }
 
-void sendPackageUpdatedNotify(in long chatId, in PackageDescr pkg)
+/// Sends the package news and reports whether Telegram accepted it: the
+/// caller remembers the version only on true.
+bool sendPackageUpdatedNotify(in long chatId, in PackageDescr pkg)
 {
     import std.format;
 
@@ -190,10 +202,18 @@ void sendPackageUpdatedNotify(in long chatId, in PackageDescr pkg)
         pkg.ver,
     );
 
-    sendNotify(chatId, text);
+    return sendNotify(chatId, text);
 }
 
-void sendNotify(in long chatId, in string markDownText)
+/// Sends the message and reports whether Telegram accepted it.
+///
+/// false means Telegram refused the message itself (a wrong chat, a blocked
+/// bot and so on): retrying the same run is pointless, so the caller leaves
+/// the package unchanged and it is attempted again on the next run.
+/// Transport failures and rate limit excesses that survive their own
+/// retries throw and stop the whole run, everything already sent stays
+/// remembered.
+bool sendNotify(in long chatId, in string markDownText)
 {
     import telega.telegram.basic: sendMessage, SendMessageMethod, ParseMode;
 
@@ -217,7 +237,7 @@ void sendNotify(in long chatId, in string markDownText)
         {
             telegram.sendMessage(msg);
 
-            return;
+            return true;
         }
         catch(tg.TelegramBotApiException e)
         {
@@ -247,7 +267,7 @@ void sendNotify(in long chatId, in string markDownText)
             else
                 logError(`Telegram: `~msg.text);
 
-            return;
+            return false;
         }
         catch(Exception e)
         {
@@ -259,6 +279,8 @@ void sendNotify(in long chatId, in string markDownText)
             Thread.sleep(retryPause * attempt);
         }
     }
+
+    return false;
 }
 
 /// We keep a pause between messages: Telegram's limit counts per token as a

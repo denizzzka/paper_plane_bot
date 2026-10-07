@@ -85,10 +85,11 @@ long[] getChatIds()
 
 void delChatId(long chatId)
 {
-    import std.conv: to;
-
     stmnt_delChatId.inject(chatId);
-    enforce(db.changes == 1, db.changes.to!string);
+
+    // The chat may be already gone: Telegram keeps refusing with 403 on
+    // every run and we delete it again each time
+    enforce(db.changes <= 1);
 }
 
 unittest
@@ -107,8 +108,12 @@ unittest
 
 import paper_plane_bot.grab: PackageDescr;
 
-/// Returns: packages with changed version since last check
-PackageDescr[] upsertPackages(PackageDescr[] pkgs)
+/// Returns: packages with changed version since last check.
+///
+/// Compares only and writes nothing: the new version is remembered with
+/// markPackage after the notification is sent, so a failed send is retried
+/// on the next run instead of being lost.
+PackageDescr[] getChangedPackages(PackageDescr[] pkgs)
 {
     PackageDescr[] changed;
 
@@ -121,15 +126,19 @@ PackageDescr[] upsertPackages(PackageDescr[] pkgs)
             res.empty || // new package
             pkg.ver != res.front.peek!string(0) // version changed
         )
-        {
-            stmnt_upsertPackage.inject(pkg.name, pkg.ver);
             changed ~= pkg;
-        }
 
         stmnt_getPackageVersion.reset;
     }
 
     return changed;
+}
+
+/// Remembers the package version as known: called only after the
+/// notification has been sent (or deliberately skipped with --ff).
+void markPackage(in PackageDescr pkg)
+{
+    stmnt_upsertPackage.inject(pkg.name, pkg.ver);
 }
 
 unittest
@@ -139,12 +148,20 @@ unittest
     PackageDescr pkg1 = {name: "test1", ver: "123"};
     PackageDescr pkg2 = {name: "test2", ver: "456"};
 
-    auto r1 = upsertPackages([pkg1, pkg2]);
-    assert(r1.length == 2);
+    auto changed = getChangedPackages([pkg1, pkg2]);
+    assert(changed.length == 2);
+
+    // nothing is remembered until markPackage is called
+    assert(getChangedPackages([pkg1, pkg2]).length == 2);
+
+    foreach(p; changed)
+        markPackage(p);
+
+    assert(getChangedPackages([pkg1, pkg2]).empty);
 
     pkg2.ver = "888";
 
-    auto upsert1 = upsertPackages([pkg1, pkg2]);
-    assert(upsert1.length == 1);
-    assert(upsert1[0].ver == "888");
+    auto changed2 = getChangedPackages([pkg1, pkg2]);
+    assert(changed2.length == 1);
+    assert(changed2[0].ver == "888");
 }

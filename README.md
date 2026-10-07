@@ -28,6 +28,11 @@ section may carry optional tuning keys, all of them with defaults:
 `sendRetries` (3), `retryPauseMs` (2000), `sendIntervalMs` (50) - pause
 between messages, `floodWaits` (3).
 
+A package version is written to the DB only after Telegram accepted its
+notification: a package whose send failed stays unchanged and is retried
+on the next run, an accepted one is never repeated. With `--ff` the
+versions are written without sending, as the option promises.
+
 Must be executed regularly by cron-like tool.
 
 `paper_plane_bot --check_conn` only tests connectivity: it tries to fetch a
