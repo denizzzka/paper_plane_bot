@@ -1,12 +1,13 @@
 module tg_http;
 
 import core.time: seconds, Duration;
-import requests;
 import std.algorithm.comparison: min;
 import std.format: format;
 import std.string: startsWith;
 import tg_http = telega.http;
 import vibe.data.json: Json, parseJsonString;
+import vibe.http.client;
+import vibe.stream.operations: readAllUTF8;
 
 class TgHttpException : Exception
 {
@@ -16,15 +17,16 @@ class TgHttpException : Exception
     }
 }
 
-/// Сколько секунд ждать, когда телега не сказала: превышение лимита она
-/// описывает сама, но перестраховываться дешевле одного лишнего ожидания.
+/// How many seconds to wait when Telegram did not say: it describes rate
+/// limit excesses itself, but over-insuring is cheaper than one extra wait.
 enum floodWaitFallback = 10;
 
-/// Сколько секунд велела ждать телега: ноль, если это не превышение лимита.
+/// How many seconds Telegram told us to wait: zero if this is not a rate
+/// limit excess.
 ///
-/// retry_after лежит в parameters, а telega их не разбирает и в исключение
-/// не кладёт, поэтому читаем тело ответа сами, а не выковыриваем число из
-/// текста ошибки.
+/// retry_after lives in parameters, and telega neither parses them nor puts
+/// them into the exception, so we read the response body ourselves instead
+/// of digging the number out of the error text.
 private Duration floodWait(string body)
 {
     Json json;
@@ -55,44 +57,52 @@ private Duration floodWait(string body)
     return wait.get!long.seconds;
 }
 
-// HttpClient для телеги: ходит в api.telegram.org напрямую или через
-// HTTP-прокси.
+// HTTP client for Telegram: talks to api.telegram.org through the same
+// settings as the feed download, that is through the shared proxy from
+// config.json if one is set (http, https or socks5).
 //
-// Свой клиент нужен ещё и ради таймаута: у клиента telega без прокси
-// timeout равен нулю, то есть ждёт ответ телеги вечно. Висящий сокет
-// тогда останавливает весь парсер, а объявления так и не будут
-// разосланы. С прокси нужен ещё и разбор ответа: телега даже на ошибку
-// отвечает json'ом, а всё остальное - ответ прокси.
+// We need our own client also for the sake of a timeout: telega's own
+// client without a proxy has timeout equal to zero, that is it waits for
+// Telegram's answer forever. A hanging socket would then stop the whole
+// run and the notifications would never be sent. With a proxy we also
+// need to parse the answer: Telegram replies with json even on errors,
+// anything else is an answer of the proxy.
 class TgHttpClient : tg_http.HttpClient
 {
-    private immutable string proxyUrl;
-    private Request rq;
+    private const HTTPClientSettings settings;
+    private string proxyDesc;
 
     private Duration retryAfter;
 
-    this(string proxyUrl = "", Duration timeout = 20.seconds)
+    this(const HTTPClientSettings settings)
     {
-        this.proxyUrl = proxyUrl;
-
-        // пустой прокси не задаём: requests сам пойдёт напрямую
-        if(proxyUrl.length > 0)
-            rq.proxy = proxyUrl;
-
-        rq.timeout = timeout;
+        this.settings = settings;
+        this.proxyDesc = settings.proxyURL.schema is null
+            ? "server" : "proxy " ~ settings.proxyURL.toString;
     }
 
     string sendGetRequest(string url)
     {
-        return answer(rq.get(url));
+        auto res = requestHTTP(url, null, settings);
+        const code = res.statusCode;
+
+        return answer(res.bodyReader.readAllUTF8(true), code);
     }
 
     string sendPostRequestJson(string url, string bodyJson)
     {
-        return answer(rq.post(url, bodyJson, "application/json"));
+        auto res = requestHTTP(url, (scope req){
+            req.method = HTTPMethod.POST;
+            req.headers["Content-Type"] = "application/json";
+            req.writeBody(cast(const(ubyte)[]) bodyJson);
+        }, settings);
+        const code = res.statusCode;
+
+        return answer(res.bodyReader.readAllUTF8(true), code);
     }
 
-    /// Задержка из последнего ответа и сразу забываем: нужна только там, где
-    /// мы поймали превышение лимита.
+    /// Delay from the last answer, taken and forgotten at once: it is only
+    /// needed where we caught a rate limit excess.
     Duration takeRetryAfter()
     {
         const wait = retryAfter;
@@ -101,16 +111,15 @@ class TgHttpClient : tg_http.HttpClient
         return wait;
     }
 
-    // Телега даже на ошибку отвечает json'ом, всё остальное - ответ прокси
-    private string answer(Response rs)
+    // Telegram replies with json even on errors, anything else is the
+    // answer of the proxy
+    private string answer(string body, const int code)
     {
-        const body = rs.responseBody.toString;
-
         if(!body.startsWith("{"))
             throw new TgHttpException(format(
-                "прокси %s ответил кодом %d: %s",
-                proxyUrl,
-                rs.code,
+                "%s replied with code %d: %s",
+                proxyDesc,
+                code,
                 body[0 .. min(body.length, 200)],
             ));
 
@@ -122,15 +131,15 @@ class TgHttpClient : tg_http.HttpClient
 
 unittest
 {
-    // тело ответа телеги при превышении лимита: номер ошибки в error_code,
-    // а секунды ожидания в parameters.retry_after
+    // Telegram's answer body on a rate limit excess: error code in
+    // error_code and the seconds to wait in parameters.retry_after
     const flood = `{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 35",`~
         `"parameters":{"retry_after":35}}`;
 
     assert(floodWait(flood) == 35.seconds);
 
-    // превышение без parameters и посторонняя ошибка ждать не велят
+    // an excess without parameters and an unrelated error do not ask to wait
     assert(floodWait(`{"ok":false,"error_code":429,"description":"Too Many Requests"}`) == Duration.zero);
     assert(floodWait(`{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}`) == Duration.zero);
-    assert(floodWait(`прокси ответил кодом 502`) == Duration.zero);
+    assert(floodWait(`proxy replied with code 502`) == Duration.zero);
 }

@@ -1,5 +1,7 @@
 import std.getopt;
 import std.stdio;
+import core.thread: Thread;
+import core.time: Duration, MonoTime, msecs, seconds;
 import paper_plane_bot.grab;
 import db;
 import tg = telega.botapi;
@@ -8,6 +10,17 @@ import vibe.core.log;
 import vibe.data.json;
 
 private tg.BotApi telegram;
+private TgHttpClient tgHttp;
+
+// How we send on timeouts and rate limit excesses: the defaults, if the
+// config has no such keys
+private int sendRetries;
+private Duration retryPause;
+private Duration sendInterval;
+private int floodWaits;
+
+private bool paced;
+private MonoTime nextSend;
 
 void main(string[] args)
 {
@@ -37,29 +50,40 @@ void main(string[] args)
 
     httpSettings = new HTTPClientSettings;
 
+    // readTimeout instead of infinite waiting: Telegram's long-poll keeps
+    // the connection for up to 30 seconds, the rest must answer faster
+    httpSettings.readTimeout = 60.seconds;
+
+    // One proxy for everything: both sending to Telegram and downloading
+    // the feed. If the key is absent - we go directly.
     {
         import vibe.inet.url;
 
-        const proxy_url = "proxy_url" in configFile;
+        const proxy_url = "proxy" in configFile;
         if(proxy_url)
             httpSettings.proxyURL = URL(proxy_url.get!string);
     }
 
-    // Прокси телеги опционален, без него работаем напрямую
-    const tgProxyUrl = tgconf["proxy"].type == Json.Type.undefined
-        ? "" : tgconf["proxy"].get!string;
+    if(httpSettings.proxyURL.schema !is null)
+        logInfo("Proxy: %s", httpSettings.proxyURL);
 
-    if(tgProxyUrl.length > 0)
-        logInfo("Telegram proxy: %s", tgProxyUrl);
+    sendRetries = tgconf.confInt("sendRetries", 3);
+    retryPause = tgconf.confInt("retryPauseMs", 2000).msecs;
+    sendInterval = tgconf.confInt("sendIntervalMs", 50).msecs;
+    floodWaits = tgconf.confInt("floodWaits", 3);
 
-    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, new TgHttpClient(tgProxyUrl));
-    const chatId = tgconf["chatId"].get!long;
+    // The client is also needed to parse Telegram's rate limit answer:
+    // telega does not put retry_after into the exception
+    tgHttp = new TgHttpClient(httpSettings);
+    telegram = new tg.BotApi(tgconf["secretBotToken"].get!string, tg.BaseApiUrl, tgHttp);
 
     if(checkConn)
     {
         checkConnections();
         return;
     }
+
+    const chatId = tgconf["chatId"].get!long;
 
     logInfo("Check Telegram for incoming private messages");
     processIncomingMessages();
@@ -180,16 +204,84 @@ void sendNotify(in long chatId, in string markDownText)
 
     logTrace("[chatId:%d] %s", chatId, msg.text);
 
-    try
-        telegram.sendMessage(msg);
-    catch(tg.TelegramBotApiException e)
+    int attempt;
+    int waited;
+
+    // network failures we retry, Telegram's own answers - not: retrying
+    // them is pointless
+    while(attempt < sendRetries)
     {
-        if(e.code == 403) // blocked by user
+        pace();
+
+        try
         {
-            delChatId(chatId);
-            logError("chat id %d blocks posting for this bot", chatId);
+            telegram.sendMessage(msg);
+
+            return;
         }
-        else
-            logError(`Telegram: `~msg.text);
+        catch(tg.TelegramBotApiException e)
+        {
+            // a rate limit excess does not count as a failed attempt: Telegram
+            // itself tells us to wait, and this is not a sending failure
+            if(e.code == 429)
+            {
+                if(++waited > floodWaits)
+                    throw e;
+
+                const wait = tgHttp.takeRetryAfter();
+                const pause = wait > Duration.zero ? wait : floodWaitFallback.seconds;
+
+                logWarn("Telegram asks to wait %d s", cast(long) pause.total!"seconds");
+
+                Thread.sleep(pause);
+
+                continue;
+            }
+
+            // Telegram's own answer, retrying is pointless
+            if(e.code == 403) // blocked by user
+            {
+                delChatId(chatId);
+                logError("chat id %d blocks posting for this bot", chatId);
+            }
+            else
+                logError(`Telegram: `~msg.text);
+
+            return;
+        }
+        catch(Exception e)
+        {
+            if(++attempt == sendRetries)
+                throw e;
+
+            logError("Telegram send failed, attempt %d of %d: %s", attempt, sendRetries, e.msg);
+
+            Thread.sleep(retryPause * attempt);
+        }
     }
+}
+
+/// We keep a pause between messages: Telegram's limit counts per token as a
+/// whole, and the send queue is long and goes in a row.
+private void pace()
+{
+    if(paced)
+    {
+        const wait = nextSend - MonoTime.currTime;
+
+        if(wait.total!"nsecs" > 0)
+            Thread.sleep(wait);
+    }
+
+    paced = true;
+    nextSend = MonoTime.currTime + sendInterval;
+}
+
+// A number from config.json or the default, if there is no such key
+private int confInt(in Json conf, string name, int defaultValue)
+{
+    if(conf[name].type == Json.Type.undefined)
+        return defaultValue;
+
+    return conf[name].get!int;
 }
